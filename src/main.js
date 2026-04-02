@@ -4,7 +4,7 @@ import { MotionMapper } from './pose/MotionMapper.js';
 import { FitnessTracker } from './fitness/FitnessTracker.js';
 import { UIManager } from './ui/UIManager.js';
 import { CameraView } from './ui/CameraView.js';
-import { MODES } from './utils/constants.js';
+import { MODES, IDLE_THRESHOLD, IDLE_SPEED_INCREASE } from './utils/constants.js';
 
 class FitBlockApp {
   constructor() {
@@ -18,10 +18,14 @@ class FitBlockApp {
     this.useMotionControl = false;
     this.selectedMode = 'classic';
     this.isPoseReady = false;
+    this.isPoseInitializing = false;
 
-    this.poseLoopId = null;
+    this.showFps = true;
     this.statsUpdateInterval = null;
     this.idleCheckInterval = null;
+
+    this.isCalibrating = false;
+    this.calibrationProgress = 0;
 
     this.init();
   }
@@ -128,12 +132,15 @@ class FitBlockApp {
       switch (e.key) {
         case 'ArrowLeft':
           this.game.move(-1);
+          this.showGameActionFeedback('leftSwipe');
           break;
         case 'ArrowRight':
           this.game.move(1);
+          this.showGameActionFeedback('rightSwipe');
           break;
         case 'ArrowUp':
           this.game.rotate();
+          this.showGameActionFeedback('rotate');
           break;
         case 'ArrowDown':
           this.game.drop();
@@ -150,6 +157,12 @@ class FitBlockApp {
         case 'Enter':
           if (!this.game.isRunning) {
             this.startGame();
+          }
+          break;
+        case 'c':
+        case 'C':
+          if (this.useMotionControl && this.game.isRunning && !this.isCalibrating) {
+            this.startCalibration();
           }
           break;
       }
@@ -236,7 +249,7 @@ class FitBlockApp {
         if (e.target.value) {
           await this.cameraView.switchCamera(e.target.value);
           if (this.useMotionControl) {
-            this.startPoseDetection();
+            await this.startPoseDetection();
           }
         }
       });
@@ -296,61 +309,127 @@ class FitBlockApp {
   }
 
   async startPoseDetection() {
-    if (!this.isPoseReady) {
-      const success = await this.poseDetector.init();
-      if (!success) {
-        console.error('Failed to initialize pose detector');
+    if (this.isPoseInitializing) {
+      return false;
+    }
+
+    this.isPoseInitializing = true;
+
+    try {
+      this.showMediaPipeLoading(true);
+      this.updateCameraStatus('加载姿态识别...');
+
+      if (!this.isPoseReady) {
+        const success = await this.poseDetector.init();
+        if (!success) {
+          console.error('Failed to initialize pose detector');
+          this.updateCameraStatus('姿态识别加载失败');
+          this.showMediaPipeLoading(false);
+          return false;
+        }
+        this.isPoseReady = true;
+      }
+
+      this.updateCameraStatus('启动摄像头...');
+
+      const video = this.cameraView.getVideoElement();
+      if (!video) {
+        console.error('Video element not found');
+        this.updateCameraStatus('摄像头未找到');
+        this.showMediaPipeLoading(false);
         return false;
       }
-      this.isPoseReady = true;
-    }
 
-    if (!this.cameraView.isCameraActive()) {
-      await this.cameraView.start();
-    }
-
-    this.motionMapper.reset();
-    this.updateModeThresholds();
-
-    this.poseDetector.onResults = (results) => {
-      const landmarks = this.poseDetector.getLandmarks();
-      this.cameraView.drawResults(landmarks, this.poseDetector);
-
-      if (landmarks && this.game.isRunning && !this.game.isPaused) {
-        const keyLandmarks = this.poseDetector.getKeyLandmarks();
-        this.motionMapper.update(keyLandmarks);
-        this.cameraView.updateAngleDisplay(this.motionMapper.getCurrentAngles());
+      const started = await this.cameraView.start();
+      if (!started) {
+        console.error('Failed to start camera');
+        this.updateCameraStatus('摄像头启动失败');
+        this.showMediaPipeLoading(false);
+        return false;
       }
-    };
 
-    this.motionMapper.onMotionDetected = (action) => {
-      this.handleMotionAction(action);
-    };
+      this.motionMapper.reset();
+      this.updateModeThresholds();
 
-    this.detectPoseLoop();
-    return true;
-  }
+      this.poseDetector.onResults = (results) => {
+        const landmarks = this.poseDetector.getLandmarks();
+        this.cameraView.drawResults(landmarks, this.poseDetector);
 
-  async detectPoseLoop() {
-    if (!this.useMotionControl || !this.game.isRunning) {
-      this.poseLoopId = null;
-      return;
+        if (this.isCalibrating && landmarks) {
+          this.processCalibration(landmarks);
+        }
+
+        if (landmarks && this.game.isRunning && !this.game.isPaused) {
+          const keyLandmarks = this.poseDetector.getKeyLandmarks();
+          this.motionMapper.update(keyLandmarks);
+          this.cameraView.updateAngleDisplay(this.motionMapper.getCurrentAngles());
+        }
+      };
+
+      this.motionMapper.onMotionDetected = (action) => {
+        this.handleMotionAction(action);
+      };
+
+      await this.poseDetector.startCamera(video);
+      this.showMediaPipeLoading(false);
+      this.updateCameraStatus('准备就绪');
+      this.isPoseInitializing = false;
+      return true;
+    } catch (error) {
+      console.error('Pose detection error:', error);
+      this.updateCameraStatus('姿态识别错误');
+      this.showMediaPipeLoading(false);
+      this.isPoseInitializing = false;
+      return false;
     }
-
-    const video = this.cameraView.getVideoElement();
-    if (video && video.readyState >= 2) {
-      await this.poseDetector.detect(video);
-    }
-
-    this.poseLoopId = requestAnimationFrame(() => this.detectPoseLoop());
   }
 
   stopPoseDetection() {
-    if (this.poseLoopId) {
-      cancelAnimationFrame(this.poseLoopId);
-      this.poseLoopId = null;
+    if (this.poseDetector) {
+      this.poseDetector.stopCamera();
     }
-    this.motionMapper.reset();
+    if (this.motionMapper) {
+      this.motionMapper.reset();
+    }
+    this.isCalibrating = false;
+  }
+
+  startCalibration() {
+    if (!this.useMotionControl || !this.game.isRunning) return;
+
+    this.isCalibrating = true;
+    this.calibrationProgress = 0;
+    this.showMediaPipeLoading(true);
+
+    const calibrationDuration = 3000;
+    const startTime = Date.now();
+
+    const updateCalibration = () => {
+      if (!this.isCalibrating) return;
+
+      const elapsed = Date.now() - startTime;
+      this.calibrationProgress = Math.min(elapsed / calibrationDuration, 1);
+
+      if (elapsed >= calibrationDuration) {
+        const landmarks = this.poseDetector.getKeyLandmarks();
+        if (landmarks) {
+          this.motionMapper.calibrate(landmarks);
+          this.isCalibrating = false;
+          this.showMediaPipeLoading(false);
+          this.updateCameraStatus('校准完成');
+          this.playSound('success');
+          return;
+        }
+      }
+
+      requestAnimationFrame(updateCalibration);
+    };
+
+    updateCalibration();
+  }
+
+  processCalibration(landmarks) {
+    // Progressive calibration - update in real-time
   }
 
   handleMotionAction(action) {
@@ -369,28 +448,33 @@ class FitBlockApp {
         if (this.game.move(-1)) {
           this.fitnessTracker.recordAction('leftSwipe', 'left');
           recorded = true;
+          this.showGameActionFeedback('leftSwipe');
         }
         break;
       case 'rightSwipe':
         if (this.game.move(1)) {
           this.fitnessTracker.recordAction('rightSwipe', 'right');
           recorded = true;
+          this.showGameActionFeedback('rightSwipe');
         }
         break;
       case 'rotate':
         if (this.game.rotate()) {
           this.fitnessTracker.recordAction('rotate', 'both');
           recorded = true;
+          this.showGameActionFeedback('rotate');
         }
         break;
       case 'quickDrop':
         this.fitnessTracker.recordAction('quickDrop', 'both');
         this.game.hardDrop();
         recorded = true;
+        this.showGameActionFeedback('quickDrop');
         break;
       case 'push':
         this.fitnessTracker.recordAction('push', 'both');
         recorded = true;
+        this.showGameActionFeedback('push');
         break;
       case 'pause':
         this.game.togglePause();
@@ -398,7 +482,38 @@ class FitBlockApp {
     }
 
     if (recorded) {
+      this.playSound('action');
       this.updateFitnessDisplay();
+    }
+  }
+
+  showGameActionFeedback(action) {
+    this.game.renderer.showActionFeedback(action);
+  }
+
+  playSound(type) {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      if (type === 'action') {
+        oscillator.frequency.value = 800;
+        gainNode.gain.value = 0.1;
+        oscillator.type = 'sine';
+      } else if (type === 'success') {
+        oscillator.frequency.value = 600;
+        gainNode.gain.value = 0.15;
+        oscillator.type = 'sine';
+      }
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      // Audio not supported
     }
   }
 
@@ -411,6 +526,7 @@ class FitBlockApp {
   startStatsUpdate() {
     this.statsUpdateInterval = setInterval(() => {
       this.updateFitnessDisplay();
+      this.updateGameRender();
     }, 1000);
   }
 
@@ -426,7 +542,8 @@ class FitBlockApp {
       this.fitnessTracker.updateIdleTime();
 
       if (this.fitnessTracker.isIdle() && this.game.isRunning && !this.game.isPaused) {
-        this.game.dropInterval = Math.max(100, this.game.dropInterval * 0.5);
+        const currentInterval = this.game.dropInterval;
+        this.game.dropInterval = Math.max(100, currentInterval * (1 - IDLE_SPEED_INCREASE));
       }
     }, 1000);
   }
@@ -441,6 +558,27 @@ class FitBlockApp {
   updateFitnessDisplay() {
     const stats = this.fitnessTracker.getStats();
     this.uiManager.updateFitnessStats(stats);
+  }
+
+  updateGameRender() {
+    if (this.game.isRunning && !this.game.isPaused) {
+      this.game.render();
+      this.game.renderer.drawNextPiece(this.game.nextPiece);
+    }
+  }
+
+  showMediaPipeLoading(show) {
+    const loadingEl = document.getElementById('mediapipe-loading');
+    if (loadingEl) {
+      loadingEl.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  updateCameraStatus(status) {
+    const statusEl = document.getElementById('camera-status');
+    if (statusEl) {
+      statusEl.textContent = status;
+    }
   }
 }
 

@@ -1,7 +1,13 @@
-import { CALORIE_COSTS } from '../utils/constants.js';
+import { CALORIE_COSTS, IDLE_THRESHOLD } from '../utils/constants.js';
 
 export class FitnessTracker {
   constructor() {
+    this.userProfile = {
+      weight: 70,
+      age: 30,
+      gender: 'male'
+    };
+
     this.reset();
   }
 
@@ -19,7 +25,11 @@ export class FitnessTracker {
 
     this.lastActionTime = null;
     this.idleTime = 0;
-    this.idleThreshold = 5000;
+
+    this.actionFeedback = {
+      lastAction: null,
+      time: 0
+    };
   }
 
   start() {
@@ -30,6 +40,25 @@ export class FitnessTracker {
 
   stop() {
     this.endTime = Date.now();
+  }
+
+  setUserProfile(profile) {
+    if (profile.weight) this.userProfile.weight = profile.weight;
+    if (profile.age) this.userProfile.age = profile.age;
+    if (profile.gender) this.userProfile.gender = profile.gender;
+  }
+
+  calculateBMR() {
+    const { weight, age, gender } = this.userProfile;
+    if (gender === 'male') {
+      return 88.362 + (13.397 * weight) + (4.799 * age) - (5.677 * age);
+    } else {
+      return 447.593 + (9.247 * weight) + (3.098 * age) - (4.330 * age);
+    }
+  }
+
+  calculateBaseMet(weight) {
+    return CALORIE_COSTS.BASE_MET_R * weight;
   }
 
   recordAction(actionType, arm = 'both') {
@@ -43,24 +72,24 @@ export class FitnessTracker {
     switch (actionType) {
       case 'leftSwipe':
         this.leftArmActions++;
-        calorieCost = CALORIE_COSTS.SWIPE;
+        calorieCost = CALORIE_COSTS.SWIPE * this.getActivityMultiplier();
         break;
       case 'rightSwipe':
         this.rightArmActions++;
-        calorieCost = CALORIE_COSTS.SWIPE;
+        calorieCost = CALORIE_COSTS.SWIPE * this.getActivityMultiplier();
         break;
       case 'rotate':
         this.leftArmActions++;
         this.rightArmActions++;
-        calorieCost = CALORIE_COSTS.ROTATE;
+        calorieCost = CALORIE_COSTS.ROTATE * this.getActivityMultiplier();
         break;
       case 'quickDrop':
         this.leftArmActions++;
         this.rightArmActions++;
-        calorieCost = CALORIE_COSTS.QUICK_DROP;
+        calorieCost = CALORIE_COSTS.QUICK_DROP * this.getActivityMultiplier();
         break;
       case 'push':
-        calorieCost = CALORIE_COSTS.PUSH;
+        calorieCost = CALORIE_COSTS.PUSH * this.getActivityMultiplier();
         break;
       default:
         calorieCost = 0;
@@ -69,12 +98,21 @@ export class FitnessTracker {
     this.totalActions++;
     this.calories += calorieCost;
 
+    this.actionFeedback = {
+      lastAction: actionType,
+      time: now
+    };
+
     this.actionHistory.push({
       type: actionType,
       arm: arm,
       calorieCost: calorieCost,
       timestamp: now
     });
+  }
+
+  getActivityMultiplier() {
+    return this.userProfile.weight / 70;
   }
 
   updateIdleTime() {
@@ -87,7 +125,11 @@ export class FitnessTracker {
   }
 
   isIdle() {
-    return this.idleTime >= this.idleThreshold;
+    return this.idleTime >= IDLE_THRESHOLD;
+  }
+
+  getIdleTime() {
+    return this.idleTime;
   }
 
   getBalance() {
@@ -116,6 +158,10 @@ export class FitnessTracker {
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
+  getLastAction() {
+    return this.actionFeedback;
+  }
+
   getStats() {
     return {
       totalActions: this.totalActions,
@@ -126,7 +172,8 @@ export class FitnessTracker {
       duration: this.getDuration(),
       durationFormatted: this.getDurationFormatted(),
       isIdle: this.isIdle(),
-      idleTime: this.idleTime
+      idleTime: this.idleTime,
+      lastAction: this.actionFeedback.lastAction
     };
   }
 

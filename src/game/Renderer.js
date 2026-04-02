@@ -1,4 +1,4 @@
-import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE, COLORS } from '../utils/constants.js';
+import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE, NEXT_PIECE_SIZE, COLORS } from '../utils/constants.js';
 
 export class Renderer {
   constructor(canvas) {
@@ -6,6 +6,14 @@ export class Renderer {
     this.ctx = canvas.getContext('2d');
     this.canvas.width = BOARD_WIDTH * CELL_SIZE;
     this.canvas.height = BOARD_HEIGHT * CELL_SIZE;
+
+    this.fps = 0;
+    this.lastFrameTime = performance.now();
+    this.frameCount = 0;
+    this.fpsUpdateTime = 0;
+
+    this.actionFeedback = null;
+    this.actionFeedbackTime = 0;
   }
 
   clear() {
@@ -92,12 +100,14 @@ export class Renderer {
     if (!previewCanvas) return;
 
     const ctx = previewCanvas.getContext('2d');
-    const size = 25;
-    const offsetX = (previewCanvas.width - piece.shape[0].length * size) / 2;
-    const offsetY = (previewCanvas.height - piece.shape.length * size) / 2;
+    const size = NEXT_PIECE_SIZE;
 
-    ctx.fillStyle = 'transparent';
     ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+    const pieceWidth = piece.shape[0].length * size;
+    const pieceHeight = piece.shape.length * size;
+    const offsetX = (previewCanvas.width - pieceWidth) / 2;
+    const offsetY = (previewCanvas.height - pieceHeight) / 2;
 
     for (let y = 0; y < piece.shape.length; y++) {
       for (let x = 0; x < piece.shape[y].length; x++) {
@@ -107,16 +117,88 @@ export class Renderer {
 
           ctx.fillStyle = piece.color;
           ctx.fillRect(cellX + 1, cellY + 1, size - 2, size - 2);
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.fillRect(cellX + 1, cellY + 1, size - 2, 3);
+          ctx.fillRect(cellX + 1, cellY + 1, 3, size - 2);
         }
       }
     }
   }
 
-  render(board, piece, ghostY) {
+  drawActionFeedback(action) {
+    if (!this.actionFeedback) return;
+
+    const now = performance.now();
+    const elapsed = now - this.actionFeedbackTime;
+
+    if (elapsed > 300) {
+      this.actionFeedback = null;
+      return;
+    }
+
+    const alpha = 1 - (elapsed / 300);
+    this.ctx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+    this.ctx.font = 'bold 16px Inter';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    let text = '';
+    switch (action) {
+      case 'leftSwipe': text = '←'; break;
+      case 'rightSwipe': text = '→'; break;
+      case 'rotate': text = '↻'; break;
+      case 'quickDrop': text = '↓↓'; break;
+      case 'push': text = '⏸'; break;
+    }
+
+    if (text) {
+      this.ctx.fillText(text, this.canvas.width / 2, 30);
+    }
+  }
+
+  showActionFeedback(action) {
+    this.actionFeedback = action;
+    this.actionFeedbackTime = performance.now();
+  }
+
+  updateFPS() {
+    this.frameCount++;
+    const now = performance.now();
+    const elapsed = now - this.fpsUpdateTime;
+
+    if (elapsed >= 500) {
+      this.fps = Math.round((this.frameCount * 1000) / elapsed);
+      this.frameCount = 0;
+      this.fpsUpdateTime = now;
+    }
+
+    return this.fps;
+  }
+
+  drawFPS() {
+    const fps = this.updateFPS();
+    
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.fillRect(5, 5, 50, 20);
+    
+    this.ctx.fillStyle = fps >= 50 ? '#10B981' : fps >= 30 ? '#F59E0B' : '#EF4444';
+    this.ctx.font = '12px JetBrains Mono';
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillText(`${fps} FPS`, 10, 8);
+  }
+
+  render(board, piece, ghostY, showFps = false) {
     this.clear();
     this.drawGrid();
     this.drawBoard(board);
     this.drawPiece(piece, ghostY);
+    this.drawActionFeedback();
+    
+    if (showFps) {
+      this.drawFPS();
+    }
   }
 
   drawPauseOverlay() {

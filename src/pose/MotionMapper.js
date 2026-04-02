@@ -1,19 +1,19 @@
-import { POSE_LANDMARKS, MOTION_THRESHOLDS } from '../utils/constants.js';
+import { MOTION_THRESHOLDS, COOLDOWN_DURATION } from '../utils/constants.js';
 
 export class MotionMapper {
   constructor() {
     this.thresholds = { ...MOTION_THRESHOLDS };
     this.thresholdMultiplier = 1;
 
-    this.lastArmState = {
-      left: 'down',
-      right: 'down',
-      both: 'down'
+    this.calibrationData = {
+      leftArmAngle: 0,
+      rightArmAngle: 0,
+      isCalibrated: false
     };
 
-    this.armPositions = {
-      left: { shoulder: null, elbow: null, wrist: null },
-      right: { shoulder: null, elbow: null, wrist: null }
+    this.lastArmState = {
+      left: 'down',
+      right: 'down'
     };
 
     this.armAngles = {
@@ -22,12 +22,6 @@ export class MotionMapper {
     };
 
     this.pressStartTime = {
-      left: null,
-      right: null,
-      both: null
-    };
-
-    this.lastWristPositions = {
       left: null,
       right: null
     };
@@ -46,7 +40,7 @@ export class MotionMapper {
       pause: 0
     };
 
-    this.cooldownDuration = 300;
+    this.cooldownDuration = COOLDOWN_DURATION;
   }
 
   setThresholds(multiplier) {
@@ -63,6 +57,42 @@ export class MotionMapper {
     if (settings.pushAngle !== undefined) {
       this.thresholds.PUSH_ANGLE = settings.pushAngle;
     }
+  }
+
+  calibrate(keyLandmarks) {
+    if (!keyLandmarks) return false;
+
+    const leftArmAngle = this.calculateArmAngle(
+      keyLandmarks.leftShoulder,
+      keyLandmarks.leftElbow,
+      keyLandmarks.leftWrist
+    );
+
+    const rightArmAngle = this.calculateArmAngle(
+      keyLandmarks.rightShoulder,
+      keyLandmarks.rightElbow,
+      keyLandmarks.rightWrist
+    );
+
+    this.calibrationData = {
+      leftArmAngle: leftArmAngle,
+      rightArmAngle: rightArmAngle,
+      isCalibrated: true
+    };
+
+    return true;
+  }
+
+  resetCalibration() {
+    this.calibrationData = {
+      leftArmAngle: 0,
+      rightArmAngle: 0,
+      isCalibrated: false
+    };
+  }
+
+  getEffectiveThreshold(baseThreshold) {
+    return baseThreshold * this.thresholdMultiplier;
   }
 
   calculateAngle(point1, point2, point3) {
@@ -82,8 +112,7 @@ export class MotionMapper {
   }
 
   isArmExtended(shoulder, elbow, wrist) {
-    const angle = this.calculateArmAngle(shoulder, elbow, wrist);
-    return angle;
+    return this.calculateArmAngle(shoulder, elbow, wrist);
   }
 
   isArmForward(shoulder, elbow, wrist, hip) {
@@ -98,8 +127,8 @@ export class MotionMapper {
   areArmsCrossed(leftWrist, rightWrist) {
     if (!leftWrist || !rightWrist) return false;
 
-    return Math.abs(leftWrist.y - rightWrist.y) < 0.05 &&
-           Math.abs(leftWrist.x - rightWrist.x) < 0.08;
+    return Math.abs(leftWrist.y - rightWrist.y) < MOTION_THRESHOLDS.CROSS_ARMS_Y_THRESHOLD &&
+           Math.abs(leftWrist.x - rightWrist.x) < MOTION_THRESHOLDS.CROSS_ARMS_X_THRESHOLD;
   }
 
   update(keyLandmarks) {
@@ -107,24 +136,29 @@ export class MotionMapper {
 
     const now = Date.now();
 
-    const leftArmAngle = this.calculateArmAngle(
+    let leftArmAngle = this.calculateArmAngle(
       keyLandmarks.leftShoulder,
       keyLandmarks.leftElbow,
       keyLandmarks.leftWrist
     );
 
-    const rightArmAngle = this.calculateArmAngle(
+    let rightArmAngle = this.calculateArmAngle(
       keyLandmarks.rightShoulder,
       keyLandmarks.rightElbow,
       keyLandmarks.rightWrist
     );
 
+    if (this.calibrationData.isCalibrated) {
+      leftArmAngle = Math.max(0, leftArmAngle - this.calibrationData.leftArmAngle);
+      rightArmAngle = Math.max(0, rightArmAngle - this.calibrationData.rightArmAngle);
+    }
+
     this.armAngles.left = leftArmAngle;
     this.armAngles.right = rightArmAngle;
 
-    const effectiveArmThreshold = this.thresholds.ARM_ANGLE * this.thresholdMultiplier;
-    const effectiveLiftThreshold = this.thresholds.LIFT_ANGLE * this.thresholdMultiplier;
-    const effectivePushThreshold = this.thresholds.PUSH_ANGLE * this.thresholdMultiplier;
+    const effectiveArmThreshold = this.getEffectiveThreshold(this.thresholds.ARM_ANGLE);
+    const effectiveLiftThreshold = this.getEffectiveThreshold(this.thresholds.LIFT_ANGLE);
+    const effectivePushThreshold = this.getEffectiveThreshold(this.thresholds.PUSH_ANGLE);
 
     const leftArmState = leftArmAngle >= effectiveLiftThreshold ? 'up' : 'down';
     const rightArmState = rightArmAngle >= effectiveLiftThreshold ? 'up' : 'down';
@@ -134,11 +168,11 @@ export class MotionMapper {
 
     const isLeftSwipe = leftArmAngle >= effectiveArmThreshold &&
                         leftArmAngle < effectiveLiftThreshold &&
-                        leftWrist.x < keyLandmarks.leftShoulder.x - 0.1;
+                        leftWrist.x < keyLandmarks.leftShoulder.x - MOTION_THRESHOLDS.SWIPE_HORIZONTAL_OFFSET;
 
     const isRightSwipe = rightArmAngle >= effectiveArmThreshold &&
                          rightArmAngle < effectiveLiftThreshold &&
-                         rightWrist.x > keyLandmarks.rightShoulder.x + 0.1;
+                         rightWrist.x > keyLandmarks.rightShoulder.x + MOTION_THRESHOLDS.SWIPE_HORIZONTAL_OFFSET;
 
     const isRotate = leftArmState === 'up' && rightArmState === 'up' &&
                      leftArmAngle >= effectiveLiftThreshold &&
@@ -210,9 +244,6 @@ export class MotionMapper {
 
     this.lastArmState.left = leftArmState;
     this.lastArmState.right = rightArmState;
-
-    this.lastWristPositions.left = leftWrist;
-    this.lastWristPositions.right = rightWrist;
   }
 
   getCurrentAngles() {
@@ -222,17 +253,19 @@ export class MotionMapper {
     };
   }
 
+  isCalibrated() {
+    return this.calibrationData.isCalibrated;
+  }
+
   reset() {
     this.lastArmState = {
       left: 'down',
-      right: 'down',
-      both: 'down'
+      right: 'down'
     };
 
     this.pressStartTime = {
       left: null,
-      right: null,
-      both: null
+      right: null
     };
 
     this.crossedArms = false;

@@ -1,6 +1,7 @@
 export const BOARD_WIDTH = 10;
 export const BOARD_HEIGHT = 20;
 export const CELL_SIZE = 30;
+export const NEXT_PIECE_SIZE = 25;
 
 export const COLORS = {
   I: '#00F5FF',
@@ -12,7 +13,9 @@ export const COLORS = {
   Z: '#FF4500',
   ghost: 'rgba(255, 255, 255, 0.2)',
   grid: 'rgba(255, 255, 255, 0.05)',
-  background: '#0F172A'
+  background: '#0F172A',
+  feedback: '#10B981',
+  feedbackError: '#EF4444'
 };
 
 export const PIECES = {
@@ -59,6 +62,7 @@ export const MAX_LEVEL = 10;
 
 export const INITIAL_DROP_INTERVAL = 1000;
 export const LEVEL_SPEED_DECREASE = 80;
+export const MIN_DROP_INTERVAL = 100;
 
 export const MODES = {
   classic: {
@@ -96,12 +100,24 @@ export const MOTION_THRESHOLDS = {
   ARM_ANGLE: 60,
   LIFT_ANGLE: 90,
   PUSH_ANGLE: 120,
-  QUICK_PRESS_DURATION: 1000
+  QUICK_PRESS_DURATION: 1000,
+  SWIPE_HORIZONTAL_OFFSET: 0.1,
+  CROSS_ARMS_Y_THRESHOLD: 0.05,
+  CROSS_ARMS_X_THRESHOLD: 0.08,
+  MIN_VISIBILITY: 0.5
 };
 
 export const CALORIE_COSTS = {
   SWIPE: 0.5,
   QUICK_DROP: 0.3,
   PUSH: 0.8,
-  ROTATE: 0.2
+  ROTATE: 0.2,
+  BASE_MET_R: 3.5
 };
+
+export const COOLDOWN_DURATION = 300;
+export const IDLE_THRESHOLD = 5000;
+export const IDLE_SPEED_INCREASE = 0.5;
+
+export const FPS_UPDATE_INTERVAL = 500;
+export const MEDIAPIPE_LOAD_TIMEOUT = 5000;

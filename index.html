@@ -8,6 +8,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="app">
@@ -57,17 +61,28 @@
             <span class="info-label">行数</span>
             <span class="info-value" id="lines">0</span>
           </div>
+          <div class="info-item">
+            <span class="info-label">下一个</span>
+            <canvas id="next-piece-canvas" width="60" height="60"></canvas>
+          </div>
         </div>
       </div>
 
       <div class="side-section">
         <div class="camera-container">
-          <video id="camera-video" autoplay playsinline></video>
+          <video id="camera-video" autoplay playsinline muted></video>
           <canvas id="camera-canvas" width="300" height="225"></canvas>
           <div class="camera-overlay" id="camera-overlay">
-            <span>摄像头加载中...</span>
+            <div class="camera-loading">
+              <div class="spinner"></div>
+              <span id="camera-status">请求摄像头权限...</span>
+            </div>
           </div>
           <div class="pose-points" id="pose-points"></div>
+          <div class="loading-indicator" id="mediapipe-loading" style="display: none;">
+            <div class="spinner"></div>
+            <span>加载姿态识别中...</span>
+          </div>
         </div>
 
         <div class="fitness-panel">
