@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitBlock - 体趣方块</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">FitBlock</h1>
+        <span class="logo-sub">体趣方块</span>
+      </div>
+      <nav class="header-nav">
+        <button class="nav-btn" id="btn-mode">
+          <span class="nav-btn-icon">🎮</span>
+          <span class="nav-btn-text">模式</span>
+        </button>
+        <button class="nav-btn" id="btn-leaderboard">
+          <span class="nav-btn-icon">🏆</span>
+          <span class="nav-btn-text">排行</span>
+        </button>
+        <button class="nav-btn" id="btn-settings">
+          <span class="nav-btn-icon">⚙️</span>
+          <span class="nav-btn-text">设置</span>
+        </button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="game-section">
+        <div class="game-container">
+          <canvas id="game-canvas" width="300" height="600"></canvas>
+          <div class="game-overlay" id="game-overlay">
+            <div class="overlay-content">
+              <h2 class="overlay-title">准备开始</h2>
+              <p class="overlay-desc">按下开始按钮或挥动双臂开始游戏</p>
+              <button class="btn btn-primary" id="btn-start-overlay">开始游戏</button>
+            </div>
+          </div>
+        </div>
+        <div class="game-info">
+          <div class="info-item">
+            <span class="info-label">等级</span>
+            <span class="info-value" id="level">1</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">分数</span>
+            <span class="info-value" id="score">0</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">行数</span>
+            <span class="info-value" id="lines">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <div class="camera-container">
+          <video id="camera-video" autoplay playsinline></video>
+          <canvas id="camera-canvas" width="300" height="225"></canvas>
+          <div class="camera-overlay" id="camera-overlay">
+            <span>摄像头加载中...</span>
+          </div>
+          <div class="pose-points" id="pose-points"></div>
+        </div>
+
+        <div class="fitness-panel">
+          <h3 class="panel-title">健身数据</h3>
+          <div class="fitness-stats">
+            <div class="stat-item">
+              <span class="stat-label">动作总数</span>
+              <span class="stat-value" id="total-actions">0</span>
+            </div>
+            <div class="stat-row">
+              <div class="stat-item stat-half">
+                <span class="stat-label">左臂</span>
+                <span class="stat-value" id="left-actions">0</span>
+              </div>
+              <div class="stat-item stat-half">
+                <span class="stat-label">右臂</span>
+                <span class="stat-value" id="right-actions">0</span>
+              </div>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">卡路里</span>
+              <span class="stat-value" id="calories">0 <small>千卡</small></span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">平衡度</span>
+              <span class="stat-value" id="balance">100%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">运动时长</span>
+              <span class="stat-value" id="duration">00:00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-panel">
+          <h3 class="panel-title">控制</h3>
+          <div class="control-buttons">
+            <button class="btn btn-primary" id="btn-start">开始</button>
+            <button class="btn btn-secondary" id="btn-pause">暂停</button>
+            <button class="btn btn-secondary" id="btn-restart">重开</button>
+          </div>
+          <div class="control-toggle">
+            <span class="toggle-label">控制方式</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="control-toggle">
+              <label for="control-toggle"></label>
+            </div>
+            <span class="toggle-value" id="control-mode">键盘</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="action-hints">
+      <h4 class="hints-title">体感动作</h4>
+      <div class="hints-grid">
+        <div class="hint-item">
+          <span class="hint-action">左挥臂</span>
+          <span class="hint-desc">方块左移</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-action">右挥臂</span>
+          <span class="hint-desc">方块右移</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-action">双臂上抬</span>
+          <span class="hint-desc">方块旋转</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-action">双臂下压</span>
+          <span class="hint-desc">快速下落</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-action">单臂前推</span>
+          <span class="hint-desc">暂停1秒</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-action">双臂交叉</span>
+          <span class="hint-desc">暂停/继续</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="mode-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>选择健身模式</h3>
+        <button class="modal-close" id="mode-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="mode-option" data-mode="classic">
+          <div class="mode-icon">🎮</div>
+          <div class="mode-info">
+            <h4>经典模式</h4>
+            <p>标准俄罗斯方块玩法，键盘/体感控制</p>
+          </div>
+        </div>
+        <div class="mode-option" data-mode="relax">
+          <div class="mode-icon">🧘</div>
+          <div class="mode-info">
+            <h4>肩颈放松</h4>
+            <p>速度降低30%，动作舒缓，适合肩颈不适人群</p>
+          </div>
+        </div>
+        <div class="mode-option" data-mode="fatburn">
+          <div class="mode-icon">🔥</div>
+          <div class="mode-info">
+            <h4>燃脂强化</h4>
+            <p>速度提升20%，高强度燃脂，适合减脂人群</p>
+          </div>
+        </div>
+        <div class="mode-option" data-mode="rehab">
+          <div class="mode-icon">💪</div>
+          <div class="mode-info">
+            <h4>康复训练</h4>
+            <p>速度降低50%，可自定义动作幅度</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="settings-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>设置</h3>
+        <button class="modal-close" id="settings-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-group">
+          <h4>动作阈值调整</h4>
+          <div class="setting-item">
+            <label>挥臂角度</label>
+            <input type="range" id="setting-arm-angle" min="45" max="90" value="60">
+            <span id="setting-arm-angle-value">60°</span>
+          </div>
+          <div class="setting-item">
+            <label>抬起角度</label>
+            <input type="range" id="setting-lift-angle" min="70" max="110" value="90">
+            <span id="setting-lift-angle-value">90°</span>
+          </div>
+          <div class="setting-item">
+            <label>前推角度</label>
+            <input type="range" id="setting-push-angle" min="100" max="150" value="120">
+            <span id="setting-push-angle-value">120°</span>
+          </div>
+        </div>
+        <div class="setting-group">
+          <h4>摄像头设置</h4>
+          <select id="camera-select">
+            <option value="">选择摄像头...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="leaderboard-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>排行榜</h3>
+        <button class="modal-close" id="leaderboard-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="leaderboard-tabs">
+          <button class="tab-btn active" data-tab="score">最高分</button>
+          <button class="tab-btn" data-tab="calories">累计卡路里</button>
+          <button class="tab-btn" data-tab="duration">运动时长</button>
+        </div>
+        <div class="leaderboard-list" id="leaderboard-list">
+          <div class="leaderboard-empty">暂无数据</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="gameover-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>游戏结束</h3>
+      </div>
+      <div class="modal-body">
+        <div class="gameover-stats">
+          <div class="gameover-stat">
+            <span class="gameover-label">最终得分</span>
+            <span class="gameover-value" id="final-score">0</span>
+          </div>
+          <div class="gameover-stat">
+            <span class="gameover-label">运动时长</span>
+            <span class="gameover-value" id="final-duration">00:00</span>
+          </div>
+          <div class="gameover-stat">
+            <span class="gameover-label">消耗卡路里</span>
+            <span class="gameover-value" id="final-calories">0 千卡</span>
+          </div>
+          <div class="gameover-stat">
+            <span class="gameover-label">有效动作</span>
+            <span class="gameover-value" id="final-actions">0</span>
+          </div>
+        </div>
+        <div class="gameover-actions">
+          <button class="btn btn-primary" id="btn-play-again">再来一局</button>
+          <button class="btn btn-secondary" id="btn-share">分享成绩</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
