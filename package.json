@@ -1,17 +1,58 @@
 {
   "name": "fitblock",
-  "private": true,
+  "productName": "FitBlock",
   "version": "1.0.0",
+  "description": "FitBlock - 基于计算机视觉的健身小游戏",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "vite build && electron .",
+    "electron:build": "vite build && electron-builder --win --dir",
+    "electron:dist": "vite build && electron-builder --win"
   },
   "dependencies": {
     "@mediapipe/pose": "^0.5.1675469404"
   },
   "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
     "vite": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.fitblock.app",
+    "productName": "FitBlock",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
   }
 }
